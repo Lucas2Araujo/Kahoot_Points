@@ -515,22 +515,40 @@ def _navegar_para_relatorio(driver, wait, kahoot_padrao):
     url_lista = "https://create.kahoot.it/user-reports/hosted-by-me/list/?searchMode=host&globalFilter=liveGame&orderBy=time&reverse=true"
     driver.get(url_lista)
 
+    # Checa se precisamos logar ou se a sessão já está válida
     fez_login = _garantir_sessao_kahoot(driver)
     if fez_login:
         print("Redirecionando de volta para a lista de relatórios após o login...")
         driver.get(url_lista)
-        time.sleep(3)  # Pausa rápida para garantir que a tabela carregou
+        time.sleep(3)
 
     print(f"Buscando o relatório mais recente com o padrão '{kahoot_padrao}'...")
+    
+    # O localizador original que sabemos que encontra o texto
+    xpath_alvo = f"(//*[contains(text(), '{kahoot_padrao}')])[1]"
+    
+    # Espera a presença do elemento (não necessariamente ser clicável ainda)
     primeiro_relatorio = wait.until(
-        EC.presence_of_element_located(
-            (
-                By.XPATH,
-                f"(//a[contains(., '{kahoot_padrao}')] | //*[contains(@data-functional-id, 'report-list-item') and contains(., '{kahoot_padrao}')] | //*[contains(@class, 'list-item') and contains(., '{kahoot_padrao}')] | //*[contains(@class, 'report-card') and contains(., '{kahoot_padrao}')])[1]",
-            )
-        )
+        EC.presence_of_element_located((By.XPATH, xpath_alvo))
     )
-    driver.execute_script("arguments[0].click();", primeiro_relatorio)
+    
+    # Rola a tela até o elemento ficar no centro da visão
+    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", primeiro_relatorio)
+    time.sleep(1.5)
+
+    # Usa o clique nativo do Selenium (que engatilha eventos do React, diferente do JS puro)
+    try:
+        primeiro_relatorio.click()
+    except Exception:
+        print("Clique no texto falhou. Tentando clicar no contêiner pai da linha...")
+        # Se falhar, clica no elemento imediatamente "pai" que costuma carregar o evento de clique no React
+        pai = primeiro_relatorio.find_element(By.XPATH, "..")
+        pai.click()
+
+    time.sleep(3)
+    if len(driver.window_handles) > 1:
+        driver.switch_to.window(driver.window_handles[-1])
+        print("Nova aba detectada! Movendo o foco do navegador...")
 
     print("Entrando no relatório e aguardando os dados...")
     wait.until(
@@ -542,7 +560,6 @@ def _navegar_para_relatorio(driver, wait, kahoot_padrao):
         )
     )
     print("Página do relatório pronta e confirmada!")
-
 
 def main(kahoot_padrao=None, planilha_nome=None):
     if not kahoot_padrao or not planilha_nome:
