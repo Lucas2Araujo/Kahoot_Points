@@ -466,15 +466,36 @@ def _garantir_sessao_kahoot(driver):
             pass
 
         usuario, senha = _validar_credenciais_kahoot()
+
+        # Digita o usuário e pausa para o React registrar o evento
+        campo_usuario.click()
         campo_usuario.send_keys(usuario)
+        time.sleep(0.5)
+
+        # Digita a senha e pausa
         campo_senha = driver.find_element(
             By.XPATH, "//input[@name='password' or @id='password']"
         )
+        campo_senha.click()
         campo_senha.send_keys(senha)
-        campo_senha.send_keys(Keys.RETURN)
+        time.sleep(0.5)
 
-        print("Login enviado com a tecla ENTER!")
-        time.sleep(5)
+        # Clica no botão de login explicitamente (ignora bloqueios do botão cinza)
+        botao_login = WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//button[@type='submit' or contains(., 'Log in') or contains(., 'Entrar')]",
+                )
+            )
+        )
+        driver.execute_script("arguments[0].click();", botao_login)
+
+        print("Login enviado via clique no botão!")
+
+        # Aguarda a página processar e sair da URL de login
+        WebDriverWait(driver, 15).until(EC.url_changes(driver.current_url))
+        print("Redirecionamento de autenticação concluído!")
 
     return precisa_logar
 
