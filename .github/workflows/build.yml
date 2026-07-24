@@ -1,11 +1,12 @@
-name: Build Executables (Linux & Windows)
+name: Build & Create Release (Manual)
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Versão da Release (ex: v1.0.0)"
+        required: true
+        default: "v1.0.0"
 
 jobs:
   build:
@@ -30,12 +31,12 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build Executable with PyInstaller (Linux)
+      - name: Build Executable (Linux)
         if: runner.os == 'Linux'
         run: |
           pyinstaller --onefile --name=KahootAuto_linux app.py
 
-      - name: Build Executable with PyInstaller (Windows)
+      - name: Build Executable (Windows)
         if: runner.os == 'Windows'
         run: |
           pyinstaller --onefile --name=KahootAuto_win.exe app.py
@@ -44,12 +45,44 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: KahootAuto-Linux
+          name: binary-linux
           path: dist/KahootAuto_linux
 
       - name: Upload Artifact (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: KahootAuto-Windows
+          name: binary-windows
           path: dist/KahootAuto_win.exe
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-linux
+          path: ./release-assets
+
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-windows
+          path: ./release-assets
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          name: Release ${{ inputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            ./release-assets/KahootAuto_linux
+            ./release-assets/KahootAuto_win.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
