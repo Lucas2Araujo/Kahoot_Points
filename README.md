@@ -13,7 +13,6 @@ Uma ferramenta em Python desenvolvida para automatizar a extração de relatóri
 ## 🚀 Principais Funcionalidades
 
 - **Navegação & Autenticação Inteligente**:
-  - **Injeção de Sessão via Cookies (`KAHOOT_COOKIES_JSON`)**: Permite injetar cookies de sessão salvos em JSON para ignorar o formulário de login e evitar verificações de Captcha (hCaptcha) em ambientes automatizados / CI/CD.
   - **Fallback para Login por Credenciais**: Autenticação automática segura quando os cookies não estão presentes.
 - **Modo Nuvem & Local Adaptativo**:
   - Detecção automática de ambiente (`CI` / GitHub Actions vs CLI Local).
@@ -48,9 +47,6 @@ Para executar o programa (seja via código-fonte, GitHub Actions ou executáveis
 | `KAHOOT_PADRAO` | Padrão de texto para identificar o relatório | `" - Resgate"` |
 | `PLANILHA_NOME` | Nome da planilha no Google Sheets | `"Resgate_Desempenhov2"` |
 | `GOOGLE_CREDENTIALS_PATH` | Caminho do arquivo JSON da Service Account (Local) | `"credentials.json"` |
-| `GOOGLE_CREDENTIALS_JSON` | Conteúdo do JSON da Service Account como string (Nuvem/CI) | `'{"type": "service_account", ...}'` |
-| `KAHOOT_COOKIES_JSON` | JSON de cookies para injeção de sessão e bypass de captcha | `'[{"name": "...", "value": "..."}, ...]'` |
-| `CHROME_PROFILE_PATH` | *(Opcional)* Caminho do perfil local do Chrome | `~/.config/google-chrome` |
 
 ### Exemplo de arquivo `.env` local
 
