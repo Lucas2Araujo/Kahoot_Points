@@ -3,7 +3,7 @@ name: Kahoot Scraper Automation
 permissions:
   contents: read
 
-on:
+'on':
   # 1. Rotina Agendada (Todo sábado às 21:30 UTC -> 18:30 no horário de Brasília)
   schedule:
     - cron: '30 21 * * 6'
@@ -38,6 +38,8 @@ jobs:
           pip install --only-binary :all: --require-hashes -r requirements.txt
 
       - name: Executar Automação
+        # O modo headless agora é obrigatório para não quebrar a máquina virtual
+        run: python app.py
         # Injeta as variáveis de ambiente na máquina virtual
         env:
           KAHOOT_USER: ${{ secrets.KAHOOT_USER }}
@@ -48,6 +50,10 @@ jobs:
           KAHOOT_PADRAO: ${{ github.event.inputs.kahoot_padrao || ' - Resgate' }}
           PLANILHA_NOME: ${{ github.event.inputs.planilha_nome || 'Cópia de Resgate_Desempenho' }}
           CI: 'true'
-        
-        # O modo headless agora é obrigatório para não quebrar a máquina virtual
-        run: python app.py
+
+      - name: Upload Screenshot de Erro
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshot
+          path: erro_kahoot.png

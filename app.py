@@ -493,7 +493,10 @@ def _navegar_para_relatorio(driver, wait, kahoot_padrao):
     print(f"Buscando o relatório mais recente com o padrão '{kahoot_padrao}'...")
     primeiro_relatorio = wait.until(
         EC.presence_of_element_located(
-            (By.XPATH, f"(//*[contains(text(), '{kahoot_padrao}')])[1]")
+            (
+                By.XPATH,
+                f"(//a[contains(., '{kahoot_padrao}')] | //*[contains(@data-functional-id, 'report-list-item') and contains(., '{kahoot_padrao}')] | //*[contains(@class, 'list-item') and contains(., '{kahoot_padrao}')] | //*[contains(@class, 'report-card') and contains(., '{kahoot_padrao}')])[1]",
+            )
         )
     )
     driver.execute_script("arguments[0].click();", primeiro_relatorio)
@@ -527,6 +530,13 @@ def main(kahoot_padrao=None, planilha_nome=None):
             )
     except Exception as e:
         print(f"\n❌ Ocorreu um erro no fluxo: {e}")
+        try:
+            print(f"🔗 URL no momento do erro: {driver.current_url}")
+            print(f"📄 Título da página: {driver.title}")
+            driver.save_screenshot("erro_kahoot.png")
+            print("📸 Screenshot salvo com sucesso como 'erro_kahoot.png'")
+        except Exception as ex:
+            print(f"⚠️ Não foi possível capturar o status da tela: {ex}")
     finally:
         driver.quit()
 
