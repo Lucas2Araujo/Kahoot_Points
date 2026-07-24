@@ -1,8 +1,10 @@
+import json
 import os
 import re
 import sys
 import time
 import unicodedata
+from datetime import datetime
 from dotenv import load_dotenv, set_key
 import gspread
 from selenium import webdriver
@@ -130,13 +132,22 @@ def extrair_dados_kahoot(driver, wait):
 
 
 def _obter_worksheet(nome_planilha, credentials_file):
-    caminho_credenciais = os.getenv("GOOGLE_CREDENTIALS_PATH", credentials_file)
-    if not os.path.exists(caminho_credenciais):
-        raise FileNotFoundError(
-            f"Arquivo de credenciais do Google não encontrado em: {caminho_credenciais}"
+    creds_json_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    if creds_json_str and creds_json_str.strip():
+        print("🔑 Autenticando no Google Sheets via GOOGLE_CREDENTIALS_JSON (Nuvem)...")
+        credenciais_dict = json.loads(creds_json_str)
+        gc = gspread.service_account_from_dict(credenciais_dict)
+    else:
+        caminho_credenciais = os.getenv("GOOGLE_CREDENTIALS_PATH", credentials_file)
+        if not os.path.exists(caminho_credenciais):
+            raise FileNotFoundError(
+                f"Arquivo de credenciais do Google não encontrado em: {caminho_credenciais}"
+            )
+        print(
+            f"🔑 Autenticando no Google Sheets via arquivo local ('{caminho_credenciais}')..."
         )
+        gc = gspread.service_account(filename=caminho_credenciais)
 
-    gc = gspread.service_account(filename=caminho_credenciais)
     sh = gc.open(nome_planilha)
 
     try:
@@ -210,12 +221,39 @@ def _salvar_quarentena(sh, nao_identificados):
     )
 
 
+def _salvar_dados_duplicados(sh, dados_alunos, motivo):
+    print(
+        f"\n⚠️ Redirecionando {len(dados_alunos)} registro(s) para a aba 'Dados Duplicados'. Motivo: {motivo}"
+    )
+    try:
+        ws_duplicados = sh.worksheet("Dados Duplicados")
+    except (gspread.exceptions.WorksheetNotFound, Exception):
+        print("Criando a aba 'Dados Duplicados'...")
+        ws_duplicados = sh.add_worksheet(title="Dados Duplicados", rows=100, cols=4)
+        ws_duplicados.append_row(
+            ["Data da Execução", "Aluno", "Pontuação", "Coluna Alvo/Motivo"]
+        )
+
+    data_execucao = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    novas_linhas = [
+        [data_execucao, nome_aluno, pontuacao, motivo]
+        for nome_aluno, pontuacao in dados_alunos.items()
+    ]
+
+    if novas_linhas:
+        ws_duplicados.append_rows(novas_linhas)
+        print(
+            f"📌 {len(novas_linhas)} registro(s) salvos na aba 'Dados Duplicados' para auditoria."
+        )
+
+
 def integrar_com_google_sheets(
     dados_alunos,
     nome_planilha="Cópia de Resgate_Desempenho",
     credentials_file="credentials.json",
+    kahoot_padrao="",
 ):
-    """Conecta ao Google Sheets via gspread e atualiza notas e quarentena."""
+    """Conecta ao Google Sheets via gspread e atualiza notas, quarentena e auditoria."""
     print(f"\n--- Conectando ao Google Sheets: '{nome_planilha}' ---")
     worksheet, sh = _obter_worksheet(nome_planilha, credentials_file)
 
@@ -227,6 +265,38 @@ def integrar_com_google_sheets(
     col_dest_idx, nome_quiz = _encontrar_coluna_destino(valores_tabela)
     print(f"🎯 Coluna destino identificada: Coluna {col_dest_idx} ('{nome_quiz}')")
 
+    # --- Validação Anti-Sobrescrita e Número do Quiz ---
+    motivo_falha = None
+
+    match_quiz = re.search(r"\d+", nome_quiz)
+    num_quiz = match_quiz.group(0) if match_quiz else None
+
+    match_kahoot = re.search(r"\d+", kahoot_padrao) if kahoot_padrao else None
+    num_kahoot = match_kahoot.group(0) if match_kahoot else None
+
+    if num_kahoot and num_quiz and num_kahoot != num_quiz:
+        motivo_falha = f"Incompatibilidade de Quiz: Kahoot '{kahoot_padrao}' (Quiz {num_kahoot}) != Coluna {col_dest_idx} '{nome_quiz}' (Quiz {num_quiz})"
+
+    col_zero = col_dest_idx - 1
+    linhas_com_dados = [
+        idx + 2
+        for idx, linha in enumerate(valores_tabela[1:])
+        if len(linha) > col_zero and linha[col_zero].strip() != ""
+    ]
+
+    if linhas_com_dados:
+        motivo_coluna = f"Coluna {col_dest_idx} ('{nome_quiz}') possui dados preenchidos nas linhas: {linhas_com_dados[:5]}"
+        if motivo_falha:
+            motivo_falha += f" | {motivo_coluna}"
+        else:
+            motivo_falha = motivo_coluna
+
+    if motivo_falha:
+        print(f"❌ Validação falhou: {motivo_falha}")
+        _salvar_dados_duplicados(sh, dados_alunos, motivo_falha)
+        return
+
+    # --- Processamento Normal ---
     mapa_linhas_alunos = _mapear_alunos_planilha(valores_tabela)
 
     atualizacoes_celulas = []
@@ -383,7 +453,9 @@ def main(kahoot_padrao=None, planilha_nome=None):
 
         if dados_raspados:
             integrar_com_google_sheets(
-                dados_alunos=dados_raspados, nome_planilha=planilha_nome
+                dados_alunos=dados_raspados,
+                nome_planilha=planilha_nome,
+                kahoot_padrao=kahoot_padrao,
             )
     except Exception as e:
         print(f"\n❌ Ocorreu um erro no fluxo: {e}")
