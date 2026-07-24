@@ -1,0 +1,9 @@
+credentials.json
+.env
+__pycache__/
+*.pyc
+.vscode/
+.sonarlint/
+build/
+dist/
+*.spec
