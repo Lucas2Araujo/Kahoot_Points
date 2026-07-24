@@ -506,8 +506,9 @@ def _garantir_sessao_kahoot(driver):
         print("Login submetido!")
         
         WebDriverWait(driver, 15).until(EC.url_changes(driver.current_url))
+        return True
 
-    return True
+    return False
 
 
 def _navegar_para_relatorio(driver, wait, kahoot_padrao):
