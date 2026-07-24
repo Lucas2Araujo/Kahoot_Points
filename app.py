@@ -440,64 +440,74 @@ def _inicializar_driver():
 
 
 def _garantir_sessao_kahoot(driver):
+    # TENTATIVA 1: Injeção de Cookies (Passe VIP)
+    cookies_str = os.getenv("KAHOOT_COOKIES_JSON")
+    if cookies_str and cookies_str.strip():
+        print("🍪 Cookies detectados! Iniciando injeção de sessão...")
+        try:
+            # Acessa uma página leve e pública do domínio apenas para habilitar a injeção
+            driver.get("https://kahoot.it/robots.txt")
+            time.sleep(1)
+            
+            cookies_list = json.loads(cookies_str)
+            for cookie in cookies_list:
+                cookie_dict = {
+                    'name': cookie['name'],
+                    'value': cookie['value'],
+                    'domain': cookie.get('domain', '.kahoot.it')
+                }
+                try:
+                    driver.add_cookie(cookie_dict)
+                except Exception:
+                    pass
+            
+            print("✅ Sessão injetada com sucesso! Pulando o formulário de login.")
+            return True
+        except Exception as e:
+            print(f"⚠️ Falha ao injetar cookies: {e}. Tentando login manual...")
+
+    # TENTATIVA 2: Login Convencional (Fallback)
     try:
+        driver.get("https://create.kahoot.it/auth/login")
         campo_usuario = WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located(
-                (By.XPATH, "//input[@name='username' or @id='username']")
-            )
+            EC.presence_of_element_located((By.XPATH, "//input[@name='username' or @id='username']"))
         )
         precisa_logar = True
     except Exception:
         precisa_logar = False
-        print("Sessão espelhada válida! Já estamos logados.")
+        print("Sessão já estava válida na máquina!")
 
     if precisa_logar:
-        print(
-            "Sessão expirada detectada. Lidando com cookies e iniciando login seguro..."
-        )
+        print("Iniciando login com credenciais...")
         try:
             botao_cookie = WebDriverWait(driver, 3).until(
                 EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
             )
             botao_cookie.click()
             time.sleep(1)
-            print("Banner de cookies aceito!")
         except Exception:
             pass
 
         usuario, senha = _validar_credenciais_kahoot()
-
-        # Digita o usuário e pausa para o React registrar o evento
+        
         campo_usuario.click()
         campo_usuario.send_keys(usuario)
         time.sleep(0.5)
-
-        # Digita a senha e pausa
-        campo_senha = driver.find_element(
-            By.XPATH, "//input[@name='password' or @id='password']"
-        )
+        
+        campo_senha = driver.find_element(By.XPATH, "//input[@name='password' or @id='password']")
         campo_senha.click()
         campo_senha.send_keys(senha)
         time.sleep(0.5)
 
-        # Clica no botão de login explicitamente (ignora bloqueios do botão cinza)
         botao_login = WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located(
-                (
-                    By.XPATH,
-                    "//button[@type='submit' or contains(., 'Log in') or contains(., 'Entrar')]",
-                )
-            )
+            EC.presence_of_element_located((By.XPATH, "//button[@type='submit' or contains(., 'Log in') or contains(., 'Entrar')]"))
         )
         driver.execute_script("arguments[0].click();", botao_login)
-
-        print("Login enviado via clique no botão!")
-
-        # Aguarda a página processar e sair da URL de login
+        print("Login submetido!")
+        
         WebDriverWait(driver, 15).until(EC.url_changes(driver.current_url))
-        print("Redirecionamento de autenticação concluído!")
 
-    return precisa_logar
+    return True
 
 
 def _navegar_para_relatorio(driver, wait, kahoot_padrao):
