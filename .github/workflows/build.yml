@@ -1,5 +1,8 @@
 name: Build & Create Release (Manual)
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
     inputs:

@@ -15,6 +15,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 load_dotenv()
 
+KAHOOT_PADRAO_DEFAULT = " - Resgate"
+PLANILHA_NOME_DEFAULT = "Resgate_Desempenhov2"
+
 
 def _normalizar_texto(texto):
     if not texto:
@@ -247,9 +250,57 @@ def _salvar_dados_duplicados(sh, dados_alunos, motivo):
         )
 
 
+def _validar_coluna_destino(nome_quiz, kahoot_padrao, col_dest_idx, valores_tabela):
+    """Valida se o quiz corrente bate com a coluna destino e se a coluna está sem dados."""
+    motivos = []
+
+    match_quiz = re.search(r"\d+", nome_quiz)
+    num_quiz = match_quiz.group(0) if match_quiz else None
+
+    match_kahoot = re.search(r"\d+", kahoot_padrao) if kahoot_padrao else None
+    num_kahoot = match_kahoot.group(0) if match_kahoot else None
+
+    if num_kahoot and num_quiz and num_kahoot != num_quiz:
+        motivos.append(
+            f"Incompatibilidade de Quiz: Kahoot '{kahoot_padrao}' (Quiz {num_kahoot}) != Coluna {col_dest_idx} '{nome_quiz}' (Quiz {num_quiz})"
+        )
+
+    col_zero = col_dest_idx - 1
+    linhas_com_dados = [
+        idx + 2
+        for idx, linha in enumerate(valores_tabela[1:])
+        if len(linha) > col_zero and linha[col_zero].strip() != ""
+    ]
+
+    if linhas_com_dados:
+        motivos.append(
+            f"Coluna {col_dest_idx} ('{nome_quiz}') possui dados preenchidos nas linhas: {linhas_com_dados[:5]}"
+        )
+
+    return " | ".join(motivos) if motivos else None
+
+
+def _preparar_atualizacoes_notas(dados_alunos, mapa_linhas_alunos, col_dest_idx, nome_quiz):
+    """Separa os alunos entre células a atualizar e registros não identificados."""
+    atualizacoes = []
+    nao_identificados = []
+
+    for nome_kahoot, pontuacao in dados_alunos.items():
+        nome_normalizado = _normalizar_texto(nome_kahoot)
+        if nome_normalizado in mapa_linhas_alunos:
+            linha_aluno = mapa_linhas_alunos[nome_normalizado]
+            atualizacoes.append(
+                gspread.Cell(row=linha_aluno, col=col_dest_idx, value=pontuacao)
+            )
+        else:
+            nao_identificados.append([nome_kahoot, pontuacao, nome_quiz])
+
+    return atualizacoes, nao_identificados
+
+
 def integrar_com_google_sheets(
     dados_alunos,
-    nome_planilha="Cópia de Resgate_Desempenho",
+    nome_planilha=PLANILHA_NOME_DEFAULT,
     credentials_file="credentials.json",
     kahoot_padrao="",
 ):
@@ -265,57 +316,23 @@ def integrar_com_google_sheets(
     col_dest_idx, nome_quiz = _encontrar_coluna_destino(valores_tabela)
     print(f"🎯 Coluna destino identificada: Coluna {col_dest_idx} ('{nome_quiz}')")
 
-    # --- Validação Anti-Sobrescrita e Número do Quiz ---
-    motivo_falha = None
-
-    match_quiz = re.search(r"\d+", nome_quiz)
-    num_quiz = match_quiz.group(0) if match_quiz else None
-
-    match_kahoot = re.search(r"\d+", kahoot_padrao) if kahoot_padrao else None
-    num_kahoot = match_kahoot.group(0) if match_kahoot else None
-
-    if num_kahoot and num_quiz and num_kahoot != num_quiz:
-        motivo_falha = f"Incompatibilidade de Quiz: Kahoot '{kahoot_padrao}' (Quiz {num_kahoot}) != Coluna {col_dest_idx} '{nome_quiz}' (Quiz {num_quiz})"
-
-    col_zero = col_dest_idx - 1
-    linhas_com_dados = [
-        idx + 2
-        for idx, linha in enumerate(valores_tabela[1:])
-        if len(linha) > col_zero and linha[col_zero].strip() != ""
-    ]
-
-    if linhas_com_dados:
-        motivo_coluna = f"Coluna {col_dest_idx} ('{nome_quiz}') possui dados preenchidos nas linhas: {linhas_com_dados[:5]}"
-        if motivo_falha:
-            motivo_falha += f" | {motivo_coluna}"
-        else:
-            motivo_falha = motivo_coluna
-
+    motivo_falha = _validar_coluna_destino(
+        nome_quiz, kahoot_padrao, col_dest_idx, valores_tabela
+    )
     if motivo_falha:
         print(f"❌ Validação falhou: {motivo_falha}")
         _salvar_dados_duplicados(sh, dados_alunos, motivo_falha)
         return
 
-    # --- Processamento Normal ---
     mapa_linhas_alunos = _mapear_alunos_planilha(valores_tabela)
+    atualizacoes, nao_identificados = _preparar_atualizacoes_notas(
+        dados_alunos, mapa_linhas_alunos, col_dest_idx, nome_quiz
+    )
 
-    atualizacoes_celulas = []
-    nao_identificados = []
-
-    for nome_kahoot, pontuacao in dados_alunos.items():
-        nome_normalizado = _normalizar_texto(nome_kahoot)
-        if nome_normalizado in mapa_linhas_alunos:
-            linha_aluno = mapa_linhas_alunos[nome_normalizado]
-            atualizacoes_celulas.append(
-                gspread.Cell(row=linha_aluno, col=col_dest_idx, value=pontuacao)
-            )
-        else:
-            nao_identificados.append([nome_kahoot, pontuacao, nome_quiz])
-
-    if atualizacoes_celulas:
-        worksheet.update_cells(atualizacoes_celulas)
+    if atualizacoes:
+        worksheet.update_cells(atualizacoes)
         print(
-            f"✅ Sucesso! {len(atualizacoes_celulas)} nota(s) inserida(s) na coluna {col_dest_idx} ('{nome_quiz}')."
+            f"✅ Sucesso! {len(atualizacoes)} nota(s) inserida(s) na coluna {col_dest_idx} ('{nome_quiz}')."
         )
 
     if nao_identificados:
@@ -324,8 +341,8 @@ def integrar_com_google_sheets(
 
 def _obter_configuracoes_interativas():
     env_path = ".env"
-    kahoot_padrao = os.getenv("KAHOOT_PADRAO", " - Resgate")
-    planilha_nome = os.getenv("PLANILHA_NOME", "Cópia de Resgate_Desempenho")
+    kahoot_padrao = os.getenv("KAHOOT_PADRAO", KAHOOT_PADRAO_DEFAULT)
+    planilha_nome = os.getenv("PLANILHA_NOME", PLANILHA_NOME_DEFAULT)
 
     print("\n" + "=" * 60)
     print("      ⚙️  MENU DE CONFIGURAÇÃO INTERATIVO DE EXECUÇÃO")
@@ -364,13 +381,23 @@ def _inicializar_driver():
     options.add_argument("--headless=new")
     options.add_argument("--window-size=1920,1080")
 
-    user_home = os.path.expanduser("~")
-    chrome_profile_path = os.getenv(
-        "CHROME_PROFILE_PATH", f"{user_home}/.config/google-chrome"
-    )
+    # Verifica se estamos na nuvem para aplicar as flags de contêiner
+    modo_nuvem = os.getenv("CI") == "true" or not sys.stdout.isatty()
 
-    options.add_argument(f"--user-data-dir={chrome_profile_path}")
-    options.add_argument(r"--profile-directory=Default")
+    if modo_nuvem:
+        # Flags ESSENCIAIS e obrigatórias para rodar Chrome no GitHub Actions/Docker
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        # Na nuvem, o Chrome usará um perfil temporário descartável, sem tentar ler pastas locais
+    else:
+        # Apenas tenta espelhar a sessão se estiver rodando no seu ambiente local
+        user_home = os.path.expanduser("~")
+        chrome_profile_path = os.getenv(
+            "CHROME_PROFILE_PATH", f"{user_home}/.config/google-chrome"
+        )
+        options.add_argument(f"--user-data-dir={chrome_profile_path}")
+        options.add_argument(r"--profile-directory=Default")
 
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, 15)
@@ -471,8 +498,8 @@ if __name__ == "__main__":
 
     if modo_nuvem:
         print("☁️ Ambiente de nuvem detectado! Operando no modo silencioso.")
-        kahoot_padrao = os.getenv("KAHOOT_PADRAO", " - Resgate")
-        planilha_nome = os.getenv("PLANILHA_NOME", "Cópia de Resgate_Desempenho")
+        kahoot_padrao = os.getenv("KAHOOT_PADRAO", KAHOOT_PADRAO_DEFAULT)
+        planilha_nome = os.getenv("PLANILHA_NOME", PLANILHA_NOME_DEFAULT)
         print("-" * 60)
         print(" 🚀 Iniciando automação com:")
         print(f"    • Padrão Kahoot:  '{kahoot_padrao}'")

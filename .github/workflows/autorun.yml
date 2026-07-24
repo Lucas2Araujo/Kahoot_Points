@@ -1,5 +1,8 @@
 name: Kahoot Scraper Automation
 
+permissions:
+  contents: read
+
 on:
   # 1. Rotina Agendada (Todo sábado às 21:30 UTC -> 18:30 no horário de Brasília)
   schedule:
@@ -15,7 +18,7 @@ on:
       planilha_nome:
         description: 'Nome da Planilha no Google Sheets'
         required: true
-        default: 'Cópia de Resgate_Desempenho'
+        default: 'Resgate_Desempenhov2'
 
 jobs:
   scrape_and_update:
