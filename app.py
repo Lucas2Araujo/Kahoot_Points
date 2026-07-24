@@ -537,6 +537,9 @@ def main(kahoot_padrao=None, planilha_nome=None):
             print("📸 Screenshot salvo com sucesso como 'erro_kahoot.png'")
         except Exception as ex:
             print(f"⚠️ Não foi possível capturar o status da tela: {ex}")
+
+        # Força o encerramento do script com status de erro para o GitHub Actions
+        sys.exit(1)
     finally:
         driver.quit()
 
