@@ -198,6 +198,8 @@ def _mapear_alunos_planilha(valores_tabela):
 
     mapa = {}
     for num_linha, linha in enumerate(valores_tabela[1:], start=2):
+        if num_linha > 24:
+            break
         if len(linha) < col_idx:
             continue
         nome = linha[col_idx - 1].strip()
@@ -250,34 +252,67 @@ def _salvar_dados_duplicados(sh, dados_alunos, motivo):
         )
 
 
-def _validar_coluna_destino(nome_quiz, kahoot_padrao, col_dest_idx, valores_tabela):
-    """Valida se o quiz corrente bate com a coluna destino e se a coluna está sem dados."""
-    motivos = []
+def _checar_compatibilidade_quiz(nome_quiz, kahoot_padrao, col_dest_idx):
+    """Verifica se o número do quiz no Kahoot coincide com o número no cabeçalho da coluna."""
+    if not kahoot_padrao:
+        return None
 
     match_quiz = re.search(r"\d+", nome_quiz)
-    num_quiz = match_quiz.group(0) if match_quiz else None
+    match_kahoot = re.search(r"\d+", kahoot_padrao)
 
-    match_kahoot = re.search(r"\d+", kahoot_padrao) if kahoot_padrao else None
-    num_kahoot = match_kahoot.group(0) if match_kahoot else None
+    if match_quiz and match_kahoot:
+        num_quiz = match_quiz.group(0)
+        num_kahoot = match_kahoot.group(0)
+        if num_kahoot != num_quiz:
+            return (
+                f"Incompatibilidade de Quiz: Kahoot '{kahoot_padrao}' (Quiz {num_kahoot}) "
+                f"!= Coluna {col_dest_idx} '{nome_quiz}' (Quiz {num_quiz})"
+            )
+    return None
 
-    if num_kahoot and num_quiz and num_kahoot != num_quiz:
-        motivos.append(
-            f"Incompatibilidade de Quiz: Kahoot '{kahoot_padrao}' (Quiz {num_kahoot}) != Coluna {col_dest_idx} '{nome_quiz}' (Quiz {num_quiz})"
-        )
 
+def _encontrar_linhas_com_dados(valores_tabela, col_dest_idx):
+    """Encontra linhas da tabela que já possuem dados preenchidos na coluna destino (até a linha 24)."""
+    if not valores_tabela:
+        return []
+
+    cabecalho = valores_tabela[0]
+    col_idx_participante = _obter_coluna_participante(cabecalho)
     col_zero = col_dest_idx - 1
-    linhas_com_dados = [
-        idx + 2
-        for idx, linha in enumerate(valores_tabela[1:])
-        if len(linha) > col_zero and linha[col_zero].strip() != ""
-    ]
+    linhas_com_dados = []
 
+    for num_linha, linha in enumerate(valores_tabela[1:24], start=2):
+        if len(linha) <= col_zero or not linha[col_zero].strip():
+            continue
+
+        nome_participante = (
+            linha[col_idx_participante - 1].strip()
+            if len(linha) >= col_idx_participante
+            else ""
+        )
+        if _normalizar_texto(nome_participante) != "pontuacao maxima":
+            linhas_com_dados.append(num_linha)
+
+    return linhas_com_dados
+
+
+def _validar_coluna_destino(nome_quiz, kahoot_padrao, col_dest_idx, valores_tabela):
+    """Valida se o quiz corrente bate com a coluna destino e se a coluna está sem dados (até a linha 24)."""
+    motivos = []
+
+    erro_quiz = _checar_compatibilidade_quiz(nome_quiz, kahoot_padrao, col_dest_idx)
+    if erro_quiz:
+        motivos.append(erro_quiz)
+
+    linhas_com_dados = _encontrar_linhas_com_dados(valores_tabela, col_dest_idx)
     if linhas_com_dados:
         motivos.append(
             f"Coluna {col_dest_idx} ('{nome_quiz}') possui dados preenchidos nas linhas: {linhas_com_dados[:5]}"
         )
 
-    return " | ".join(motivos) if motivos else None
+    if not motivos:
+        return None
+    return " | ".join(motivos)
 
 
 def _preparar_atualizacoes_notas(dados_alunos, mapa_linhas_alunos, col_dest_idx, nome_quiz):
@@ -400,7 +435,7 @@ def _inicializar_driver():
         options.add_argument(r"--profile-directory=Default")
 
     driver = webdriver.Chrome(options=options)
-    wait = WebDriverWait(driver, 15)
+    wait = WebDriverWait(driver, 25)
     return driver, wait
 
 
@@ -441,13 +476,19 @@ def _garantir_sessao_kahoot(driver):
         print("Login enviado com a tecla ENTER!")
         time.sleep(5)
 
+    return precisa_logar
+
 
 def _navegar_para_relatorio(driver, wait, kahoot_padrao):
     print("Acessando a lista de relatórios...")
     url_lista = "https://create.kahoot.it/user-reports/hosted-by-me/list/?searchMode=host&globalFilter=liveGame&orderBy=time&reverse=true"
     driver.get(url_lista)
 
-    _garantir_sessao_kahoot(driver)
+    fez_login = _garantir_sessao_kahoot(driver)
+    if fez_login:
+        print("Redirecionando de volta para a lista de relatórios após o login...")
+        driver.get(url_lista)
+        time.sleep(3)  # Pausa rápida para garantir que a tabela carregou
 
     print(f"Buscando o relatório mais recente com o padrão '{kahoot_padrao}'...")
     primeiro_relatorio = wait.until(
