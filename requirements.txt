@@ -4,6 +4,10 @@
 #
 #    pip-compile --allow-unsafe --generate-hashes --output-file=requirements.txt requirements.in
 #
+altgraph==0.17.5 \
+    --hash=sha256:f3a22400bce1b0c701683820ac4f3b159cd301acab067c51c653e06961600597 \
+    --hash=sha256:c87b395dd12fabde9c99573a9749d67da8d29ef9de0125c7f536699b4a9bc9e7
+    # via pyinstaller
 attrs==26.1.0 \
     --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309 \
     --hash=sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32
@@ -295,6 +299,10 @@ outcome==1.3.0.post0 \
     # via
     #   trio
     #   trio-websocket
+pefile==2024.8.26 \
+    --hash=sha256:76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f \
+    --hash=sha256:3ff6c5d8b43e8c37bb6e6dd5085658d658a7a0bdcd20b6a07b1fcfc1c4e9d632
+    # via pyinstaller
 packaging==26.2 \
     --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e \
     --hash=sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661
@@ -313,6 +321,24 @@ pycparser==3.0 \
     --hash=sha256:600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29 \
     --hash=sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992
     # via cffi
+pyinstaller==6.21.0 \
+    --hash=sha256:327d132389f37912609e01be62810cf96b5aa95b613903e4b8692e0d12fb0eda \
+    --hash=sha256:7071d4b094d5b40deeef5fa3d3b98a1b846087f7562b49209663d5f9281fe251 \
+    --hash=sha256:6b6374d652107dd4a2eeece903ff82bb4045bb5e1006c5a158a6dcdbefe84bf2 \
+    --hash=sha256:4e3108b3f02384560da70e39b8bf22b0ad597d02bd68a40d76ea91c1cfa00cad \
+    --hash=sha256:697532279f535ad572bda613db4f821540e235c7854ca6da4d3bf0373f4415ee \
+    --hash=sha256:605169523a6b5ace39f13dfbff21add9f2bc43df99c7daf9394fefb2c45e8b6f \
+    --hash=sha256:5fa56746c1e76f93634d018502301378a2d0c382553d37d8c3c34ff436c12dd1 \
+    --hash=sha256:42395ec76df8e8120c36b13339d9db8cab83e316a12839ee303cc00fc941bb74 \
+    --hash=sha256:c6b28d30d8fd99ce162ff3aab5013ed44dbfb747566b1f01b9bed7964d7c14e9 \
+    --hash=sha256:7fae06c494ce0ebfe6bd3055c0e409def884f63af2e3705d06bd431ad9237fc7 \
+    --hash=sha256:f13c95c9c03fb567217135919f93815c305813126780b0ed6e0123cb8acaf025 \
+    --hash=sha256:bb9fab705983e393a2d1cac77d6972513057ad800215fd861dc15ff5272e98fd
+    # via -r requirements.in
+pyinstaller-hooks-contrib==2026.6 \
+    --hash=sha256:fd13b8ac126b35361175edacd41a0d97080b75dd5f4b594ecefefff969509dd3 \
+    --hash=sha256:bef5002c32f4f50bd55b005da12cff64eca8783e7eaf86a06a62410164bab725
+    # via pyinstaller
 pysocks==1.7.1 \
     --hash=sha256:08e69f092cc6dbe92a0fdd16eeb9b9ffbc13cadfe5ca4c7bd92ffb078b293299 \
     --hash=sha256:2725bd0a9925919b9b51739eea5f9e2bae91e83288108a9ad338b2e3a4435ee5 \
@@ -322,6 +348,10 @@ python-dotenv==1.2.1 \
     --hash=sha256:42667e897e16ab0d66954af0e60a9caa94f0fd4ecf3aaf6d2d260eec1aa36ad6 \
     --hash=sha256:b81ee9561e9ca4004139c6cbba3a238c32b03e4894671e181b671e8cb8425d61
     # via -r requirements.in
+pywin32-ctypes==0.2.3 \
+    --hash=sha256:8a1513379d709975552d202d942d9837758905c8d01eb82b8bcc30918929e7b8 \
+    --hash=sha256:d162dc04946d704503b2edc4d55f3dba5c1d539ead017afa00142c38b9885755
+    # via pyinstaller
 requests==2.34.2 \
     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
     --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed
