@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import time
 import unicodedata
 from dotenv import load_dotenv, set_key
@@ -371,8 +372,9 @@ def _navegar_para_relatorio(driver, wait, kahoot_padrao):
     print("Página do relatório pronta e confirmada!")
 
 
-def main():
-    kahoot_padrao, planilha_nome = _obter_configuracoes_interativas()
+def main(kahoot_padrao=None, planilha_nome=None):
+    if not kahoot_padrao or not planilha_nome:
+        kahoot_padrao, planilha_nome = _obter_configuracoes_interativas()
     driver, wait = _inicializar_driver()
 
     try:
@@ -390,4 +392,22 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    print("\n--- Configuração da Execução ---")
+
+    # Verifica se o script está rodando no GitHub Actions (ou sem terminal interativo)
+    modo_nuvem = os.getenv("CI") == "true" or not sys.stdout.isatty()
+
+    if modo_nuvem:
+        print("☁️ Ambiente de nuvem detectado! Operando no modo silencioso.")
+        kahoot_padrao = os.getenv("KAHOOT_PADRAO", " - Resgate")
+        planilha_nome = os.getenv("PLANILHA_NOME", "Cópia de Resgate_Desempenho")
+        print("-" * 60)
+        print(" 🚀 Iniciando automação com:")
+        print(f"    • Padrão Kahoot:  '{kahoot_padrao}'")
+        print(f"    • Planilha Sheets: '{planilha_nome}'")
+        print("=" * 60 + "\n")
+    else:
+        print("💻 Ambiente local detectado! Iniciando CLI.")
+        kahoot_padrao, planilha_nome = _obter_configuracoes_interativas()
+
+    main(kahoot_padrao, planilha_nome)
