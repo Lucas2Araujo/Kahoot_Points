@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Versão da Release (ex: v1.0.0)"
+        description: "Versão da Release (ex: v1.0.0 ou v1.0.0-Alfa)"
         required: true
         default: "v1.0.0"
 
@@ -74,15 +74,14 @@ jobs:
           name: binary-windows
           path: ./release-assets
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.version }}
-          name: Release ${{ inputs.version }}
-          draft: false
-          prerelease: false
-          files: |
-            ./release-assets/KahootAuto_linux
-            ./release-assets/KahootAuto_win.exe
+      - name: Create Release via GitHub CLI
+        run: |
+          RAW_TAG="${{ inputs.version }}"
+          CLEAN_TAG=$(echo "$RAW_TAG" | sed 's/ /-/g' | tr -cd 'a-zA-Z0-9._-')
+          if [ -z "$CLEAN_TAG" ]; then
+            CLEAN_TAG="v1.0.0"
+          fi
+          echo "Criando release com tag sanitizada: $CLEAN_TAG"
+          gh release create "$CLEAN_TAG" ./release-assets/* --title "Release $RAW_TAG" --notes "Release automatizada contendo os executáveis compilados para Linux e Windows."
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
