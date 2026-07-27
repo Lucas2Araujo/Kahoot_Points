@@ -35,12 +35,12 @@ jobs:
       - name: Build Executable (Linux)
         if: runner.os == 'Linux'
         run: |
-          python -m PyInstaller --onefile --name=KahootAuto_linux app.py
+          python -m PyInstaller --onefile --hidden-import="selenium.webdriver.chrome.options" --name=KahootAuto_linux app.py
 
       - name: Build Executable (Windows)
         if: runner.os == 'Windows'
         run: |
-          python -m PyInstaller --onefile --name=KahootAuto_win.exe app.py
+          python -m PyInstaller --onefile --hidden-import="selenium.webdriver.chrome.options" --name=KahootAuto_win.exe app.py
           
       - name: Upload Artifact (Linux)
         if: runner.os == 'Linux'
