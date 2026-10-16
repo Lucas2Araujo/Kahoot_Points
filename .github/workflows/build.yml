@@ -4,6 +4,9 @@ permissions:
   contents: read
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
@@ -80,7 +83,12 @@ jobs:
 
       - name: Create Release via GitHub CLI
         run: |
-          gh release create "$VERSION" ./release-assets/* --title "Release $VERSION" --notes "Release automatizada contendo os executáveis compilados para Linux e Windows."
+          TAG_OR_INPUT="${INPUT_VERSION:-$GITHUB_REF_NAME}"
+          echo "Publicando release para tag: $TAG_OR_INPUT"
+          gh release create "$TAG_OR_INPUT" ./release-assets/* \
+            --title "Release $TAG_OR_INPUT" \
+            --generate-notes \
+            --notes "Release automatizada contendo os executáveis compilados para Linux e Windows."
         env:
-          VERSION: ${{ inputs.version }}
+          INPUT_VERSION: ${{ inputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

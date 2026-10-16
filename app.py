@@ -8,6 +8,7 @@ from datetime import datetime
 from dotenv import load_dotenv, set_key
 import gspread
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -15,8 +16,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 load_dotenv()
 
-KAHOOT_PADRAO_DEFAULT = " - Resgate"
-PLANILHA_NOME_DEFAULT = "Resgate_Desempenhov2"
+KAHOOT_PADRAO_DEFAULT = " - Profetas"
+PLANILHA_NOME_DEFAULT = "Profetas_Desempenho"
 
 
 def _normalizar_texto(texto):
@@ -415,26 +416,36 @@ def _inicializar_driver():
     options = webdriver.ChromeOptions()
     options.add_argument("--headless=new")
     options.add_argument("--window-size=1920,1080")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
 
-    # Verifica se estamos na nuvem para aplicar as flags de contêiner
+    # Verifica se estamos na nuvem
     modo_nuvem = os.getenv("CI") == "true" or not sys.stdout.isatty()
 
-    if modo_nuvem:
-        # Flags ESSENCIAIS e obrigatórias para rodar Chrome no GitHub Actions/Docker
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
-        # Na nuvem, o Chrome usará um perfil temporário descartável, sem tentar ler pastas locais
-    else:
-        # Apenas tenta espelhar a sessão se estiver rodando no seu ambiente local
-        user_home = os.path.expanduser("~")
-        chrome_profile_path = os.getenv(
-            "CHROME_PROFILE_PATH", f"{user_home}/.config/google-chrome"
+    if not modo_nuvem:
+        # Usa perfil local específico para Kahoot na pasta do projeto, evitando problemas de permissão
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        perfil_automacao = os.getenv(
+            "CHROME_PROFILE_PATH", os.path.join(script_dir, ".chrome_profile")
         )
-        options.add_argument(f"--user-data-dir={chrome_profile_path}")
-        options.add_argument(r"--profile-directory=Default")
+        os.makedirs(perfil_automacao, exist_ok=True)
+        options.add_argument(f"--user-data-dir={perfil_automacao}")
 
-    driver = webdriver.Chrome(options=options)
+    try:
+        driver = webdriver.Chrome(options=options)
+    except Exception as e:
+        # Fallback inteligente: se o Selenium Manager falhar em resolver binários automaticamente
+        user_home = os.path.expanduser("~")
+        chrome_cached = f"{user_home}/.cache/selenium/chrome/linux64/153.0.8010.52/chrome"
+        driver_cached = f"{user_home}/.cache/selenium/chromedriver/linux64/153.0.8010.52/chromedriver"
+        if os.path.exists(chrome_cached) and os.path.exists(driver_cached):
+            options.binary_location = chrome_cached
+            service = Service(executable_path=driver_cached)
+            driver = webdriver.Chrome(service=service, options=options)
+        else:
+            raise e
+
     wait = WebDriverWait(driver, 25)
     return driver, wait
 

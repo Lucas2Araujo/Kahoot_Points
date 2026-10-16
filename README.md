@@ -95,16 +95,26 @@ Baixe a versão pronta para uso (sem necessidade de instalar o Python) na aba [R
 
 ---
 
-## 💻 Desenvolvimento Local
+## 💻 Execução Rápida & Desenvolvimento Local
 
-Para rodar o projeto pelo código-fonte:
+### ⚡ Scripts de Inicialização Automática (Criação de venv + Dependências + Execução)
+- **Linux / macOS**:
+  ```bash
+  ./run.sh
+  ```
+- **Windows**:
+  Basta dar dois cliques em `run.bat` ou executar no terminal:
+  ```cmd
+  run.bat
+  ```
 
+### Execução Manual pelo Código-fonte:
 1. Clone o repositório:
    ```bash
    git clone https://github.com/Lucas2Araujo/Kahoot_Points.git
    cd Kahoot_Points
    ```
-2. Instale as dependências fixadas:
+2. Instale as dependências:
    ```bash
    pip install -r requirements.txt
    ```
