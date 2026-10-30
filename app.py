@@ -132,14 +132,15 @@ def _processar_linha_jogador(linha):
     if not texto_linha:
         return None, None
 
-    colunas = linha.find_elements(By.XPATH, "./td | ./div")
-    if len(colunas) >= 2:
-        nome = colunas[0].text.strip()
-        score_raw = colunas[-1].text.strip()
+    tds = linha.find_elements(By.XPATH, "./td")
+    if tds:
+        textos_tds = [td.text.strip() for td in tds if td.text.strip()]
+        nome = next((t for t in textos_tds if not t.isdigit()), None)
+        score_raw = textos_tds[-1] if textos_tds else ""
     else:
-        partes = texto_linha.split("\n")
-        nome = partes[0].strip()
-        score_raw = partes[-1].strip()
+        partes = [p.strip() for p in texto_linha.split("\n") if p.strip()]
+        nome = next((p for p in partes if not p.isdigit()), None)
+        score_raw = partes[-1] if partes else ""
 
     score_digits = re.sub(r"[^\d]", "", score_raw)
     if score_digits and nome:
@@ -282,15 +283,16 @@ def _mapear_alunos_planilha(valores_tabela):
     col_idx = _obter_coluna_participante(valores_tabela)
 
     mapa = {}
-    # Linha 3 (índice 2) até a linha 28 (linha 29 é Ayla - pontuação máxima)
     for num_linha, linha in enumerate(valores_tabela[2:], start=3):
-        if num_linha > 28:
-            break
         if len(linha) < col_idx:
             continue
         nome = linha[col_idx - 1].strip()
-        if nome and "pontuacao maxima" not in _normalizar_texto(nome) and "legenda" not in _normalizar_texto(nome):
-            mapa[_normalizar_texto(nome)] = num_linha
+        nome_norm = _normalizar_texto(nome)
+        if not nome_norm:
+            continue
+        if any(t in nome_norm for t in ["pontuacao maxima", "legenda", "total", "media"]):
+            break
+        mapa[nome_norm] = num_linha
 
     return mapa
 
@@ -360,7 +362,7 @@ def _checar_compatibilidade_quiz(nome_quiz, kahoot_padrao, col_dest_idx):
 
 
 def _encontrar_linhas_com_dados(valores_tabela, col_dest_idx):
-    """Encontra linhas de alunos que já possuem dados preenchidos na coluna destino (linha 3 até 28)."""
+    """Encontra linhas de alunos que já possuem dados preenchidos na coluna destino."""
     if not valores_tabela:
         return []
 
@@ -368,18 +370,16 @@ def _encontrar_linhas_com_dados(valores_tabela, col_dest_idx):
     col_zero = col_dest_idx - 1
     linhas_com_dados = []
 
-    # Linha 3 (índice 2) até a linha 28 (linha 29 é Ayla - pontuação máxima)
-    for num_linha, linha in enumerate(valores_tabela[2:28], start=3):
-        if len(linha) <= col_zero or not linha[col_zero].strip():
+    for num_linha, linha in enumerate(valores_tabela[2:], start=3):
+        if len(linha) < col_idx_participante:
             continue
-
-        nome_participante = (
-            linha[col_idx_participante - 1].strip()
-            if len(linha) >= col_idx_participante
-            else ""
-        )
+        nome_participante = linha[col_idx_participante - 1].strip()
         nome_norm = _normalizar_texto(nome_participante)
-        if "pontuacao maxima" not in nome_norm and "legenda" not in nome_norm:
+        if not nome_norm:
+            continue
+        if any(t in nome_norm for t in ["pontuacao maxima", "legenda", "total", "media"]):
+            break
+        if len(linha) > col_zero and linha[col_zero].strip():
             linhas_com_dados.append(num_linha)
 
     return linhas_com_dados
@@ -821,84 +821,35 @@ def _treinar_dicionario_com_relatorio(dados_alunos, nome_rel, nome_planilha):
 
 
 def _abrir_relatorio_por_item(driver, wait, item_relatorio):
-    """Abre o relatório usando o campo de pesquisa interno do Kahoot e seletores nativos de título."""
+    """Abre o relatório clicando nele na listagem do Kahoot."""
     texto_relatorio = item_relatorio["texto"]
     print(f"\n📂 Abrindo relatório: '{texto_relatorio}'...")
 
-    # Extrai o termo de busca (ex: "3 - Resgate")
-    texto_busca = texto_relatorio.split("(")[0].strip()
+    aba_principal = driver.current_window_handle
 
-    # Extrai número do relatório para desambiguação (ex: '2' em '2 - Resgate', para não pegar '12 - Resgate')
-    match_num = re.search(r"\b(\d+)\b", texto_relatorio)
-    num_esperado = match_num.group(1) if match_num else None
-
-    # 1. Usa o campo de busca nativo do Kahoot para filtrar o relatório
-    try:
-        campo_pesquisa = wait.until(
-            EC.presence_of_element_located(
-                (
-                    By.XPATH,
-                    "//input[@placeholder='Pesquisar' or @placeholder='Search'] | //input[@type='search']",
-                )
-            )
-        )
-        campo_pesquisa.click()
-        campo_pesquisa.send_keys(Keys.CONTROL + "a")
-        campo_pesquisa.send_keys(Keys.BACKSPACE)
-        time.sleep(0.3)
-        campo_pesquisa.send_keys(texto_busca)
-        campo_pesquisa.send_keys(Keys.ENTER)
-        time.sleep(2)
-    except Exception as e:
-        print(f"Aviso ao usar campo de pesquisa: {e}")
-
-    # 2. Localiza os títulos usando o seletor funcional nativo do Kahoot
-    xpath_titulos = "//*[@data-functional-selector='reports-list__row__title'] | //div[contains(@class, 'Title-sc-')]"
-    titles = []
-    try:
-        titles = WebDriverWait(driver, 5).until(
-            EC.presence_of_all_elements_located((By.XPATH, xpath_titulos))
-        )
-    except Exception:
-        pass
-
+    # Aguarda o elemento aparecer na listagem (espera a renderização do React)
+    xpath_direto = f"//*[text()='{texto_relatorio}' or contains(text(), '{texto_relatorio}')]"
     elemento = None
-
-    # Prioridade 1: Match exato de texto
-    for t in titles:
-        if t.text.strip() == texto_relatorio:
-            elemento = t
-            break
-
-    # Prioridade 2: Match com número exato do quiz (evita '2' casar com '12')
-    if not elemento and num_esperado:
-        for t in titles:
-            txt = t.text.strip()
-            match_t = re.search(r"\b(\d+)\b", txt)
-            if match_t and match_t.group(1) == num_esperado and texto_busca.lower() in txt.lower():
-                elemento = t
-                break
-
-    # Prioridade 3: Match parcial com texto_busca
-    if not elemento:
-        for t in titles:
-            if texto_busca.lower() in t.text.lower():
-                elemento = t
-                break
-
-    # Prioridade 4: Se só houver 1 linha filtrada, usa ela
-    if not elemento and len(titles) == 1:
-        elemento = titles[0]
+    try:
+        elemento = wait.until(EC.presence_of_element_located((By.XPATH, xpath_direto)))
+    except Exception:
+        # Fallback para prefixo se houver parênteses (ex: "4 - Profetas")
+        texto_busca = texto_relatorio.split("(")[0].strip()
+        try:
+            elemento = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.XPATH, f"//*[contains(text(), '{texto_busca}')]"))
+            )
+        except Exception:
+            pass
 
     if not elemento:
         raise Exception(
-            f"Não foi possível localizar o relatório '{texto_relatorio}' na lista filtrada do Kahoot."
+            f"Não foi possível localizar o relatório '{texto_relatorio}' na listagem do Kahoot."
         )
 
     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elemento)
     time.sleep(0.5)
 
-    aba_principal = driver.current_window_handle
     try:
         elemento.click()
     except Exception:
@@ -936,7 +887,7 @@ def main(kahoot_padrao=None, planilha_nome=None):
     driver, wait = _inicializar_driver()
 
     try:
-        url_lista = "https://create.kahoot.it/user-reports/hosted-by-me/list/?searchMode=host&globalFilter=liveGame&orderBy=time&reverse=true"
+        url_lista = "https://create.kahoot.it/reports/kahoots/"
         print("Acessando a lista de relatórios...")
         driver.get(url_lista)
 
@@ -978,9 +929,10 @@ def main(kahoot_padrao=None, planilha_nome=None):
 
             driver.switch_to.window(aba_lista)
 
-            # Sempre volta para a lista limpa (sem query params de busca anterior)
-            driver.get(url_lista)
-            time.sleep(3)
+            # Recarrega a listagem limpa apenas do 2º relatório em diante
+            if idx > 1:
+                driver.get(url_lista)
+                time.sleep(2)
 
             _abrir_relatorio_por_item(driver, wait, item_rel)
             dados_raspados = extrair_dados_kahoot(driver, wait)
